@@ -1,0 +1,172 @@
+services:
+  # Kafka & Zookeeper setup
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    hostname: zookeeper
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - 22181:2181
+    networks:
+      - network
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - network
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  # Gateway service (acts as the proxy)
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    env_file:
+      - ./services/api-gateway/.env
+    ports:
+      - "3000:3000"
+    networks:
+      - network
+
+  # User service
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    container_name: user-service
+    env_file:
+      - ./services/user-service/.env
+    ports:
+      - "1000:1000"
+    networks:
+      - network
+    depends_on:
+      - user-db
+
+  user-db:
+    image: postgres:15-alpine
+    container_name: user-db
+    restart: always
+    env_file:
+      - ./services/user-service/.env
+    ports:
+      - "5432:5432"
+    volumes:
+      - userdb:/var/lib/postgresql/data
+    networks:
+      - network
+
+  # Order service
+  order-service:
+    build:
+      context: ./services/order-service
+      dockerfile: Dockerfile
+    container_name: order-service
+    ports:
+      - "2000:2000"
+    env_file:
+      - ./services/order-service/.env
+    networks:
+      - network
+    depends_on:
+      - order-db
+      - kafka
+
+  order-db:
+    image: postgres:15-alpine
+    container_name: order-db
+    env_file:
+      - ./services/order-service/.env
+    ports:
+      - "5433:5432"
+    volumes:
+      - orderdb:/var/lib/postgresql/data
+    networks:
+      - network
+
+  # Payment service
+  payment-service:
+    build:
+      context: ./services/payment-service
+      dockerfile: Dockerfile
+    container_name: payment-service
+    env_file:
+      - ./services/payment-service/.env
+    ports:
+      - "4000:4000"
+    networks:
+      - network
+    depends_on:
+      - kafka
+
+  # Notification service
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: notification-service
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./services/notification-service/.env
+    networks:
+      - network
+    depends_on:
+      - kafka
+
+  # Consul (central configuration KV)
+  consul:
+    image: hashicorp/consul:1.17
+    container_name: consul
+    command: ["agent", "-dev", "-client=0.0.0.0"]
+    ports:
+      - "8500:8500"
+    networks:
+      - network
+
+  # Seed Consul KV with default configuration (one-shot)
+  consul-seed:
+    image: curlimages/curl:8.6.0
+    container_name: consul-seed
+    depends_on:
+      - consul
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      '
+      until curl -sf http://consul:8500/v1/status/leader > /dev/null; do echo "waiting for consul"; sleep 1; done;
+      curl -sf -X PUT --data "{\"port\":3000,\"userServiceUrl\":\"http://user-service:1000\",\"orderServiceUrl\":\"http://order-service:2000\"}" http://consul:8500/v1/kv/config/api-gateway;
+      curl -sf -X PUT --data "{\"port\":1000}" http://consul:8500/v1/kv/config/user-service;
+      curl -sf -X PUT --data "{\"port\":2000}" http://consul:8500/v1/kv/config/order-service;
+      curl -sf -X PUT --data "{\"port\":4000,\"apiGatewayUrl\":\"http://api-gateway:3000\"}" http://consul:8500/v1/kv/config/payment-service;
+      curl -sf -X PUT --data "{\"port\":5000}" http://consul:8500/v1/kv/config/notification-service;
+      echo "consul seed done";
+      '
+    networks:
+      - network
+
+volumes:
+  userdb:
+  orderdb:
+  kafka_data:
+
+networks:
+  network:
+    driver: bridge
