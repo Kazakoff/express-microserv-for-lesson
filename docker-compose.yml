@@ -140,6 +140,8 @@ services:
     container_name: config-service
     ports:
       - "6000:6000"
+    volumes:
+      - ./services/config-service/config/services.yaml:/app/config/services.yaml:ro
     networks:
       - network
 
@@ -155,21 +157,15 @@ services:
 
   # Seed Consul KV with default configuration (one-shot)
   consul-seed:
-    image: curlimages/curl:8.6.0
+    build:
+      context: ./services/config-service
+      dockerfile: Dockerfile
     container_name: consul-seed
     depends_on:
       - consul
-    entrypoint: ["/bin/sh", "-c"]
-    command: >
-      '
-      until curl -sf http://consul:8500/v1/status/leader > /dev/null; do echo "waiting for consul"; sleep 1; done;
-      curl -sf -X PUT --data "{\"port\":3000,\"userServiceUrl\":\"http://user-service:1000\",\"orderServiceUrl\":\"http://order-service:2000\"}" http://consul:8500/v1/kv/config/api-gateway;
-      curl -sf -X PUT --data "{\"port\":1000}" http://consul:8500/v1/kv/config/user-service;
-      curl -sf -X PUT --data "{\"port\":2000}" http://consul:8500/v1/kv/config/order-service;
-      curl -sf -X PUT --data "{\"port\":4000,\"apiGatewayUrl\":\"http://api-gateway:3000\"}" http://consul:8500/v1/kv/config/payment-service;
-      curl -sf -X PUT --data "{\"port\":5000}" http://consul:8500/v1/kv/config/notification-service;
-      echo "consul seed done";
-      '
+    command: ["node", "./dist/seed-consul.js"]
+    volumes:
+      - ./services/config-service/config/services.yaml:/app/config/services.yaml:ro
     networks:
       - network
 
