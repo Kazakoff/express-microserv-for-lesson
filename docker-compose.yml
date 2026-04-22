@@ -132,6 +132,17 @@ services:
     depends_on:
       - kafka
 
+  # Config service (HTTP configuration endpoint)
+  config-service:
+    build:
+      context: ./services/config-service
+      dockerfile: Dockerfile
+    container_name: config-service
+    ports:
+      - "6000:6000"
+    networks:
+      - network
+
   # Consul (central configuration KV)
   consul:
     image: hashicorp/consul:1.17
