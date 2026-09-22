@@ -15,10 +15,24 @@ export async function processPayment(
   amount: number,
   item: string,
   cardNumber: string,
-  expiry_date: string
+  expiryDate: string | Date
 ) {
   try {
-    const [expMonth, expYear] = expiry_date
+    const expiry =
+      expiryDate instanceof Date
+        ? `${String(expiryDate.getUTCMonth() + 1).padStart(2, "0")}/${String(
+            expiryDate.getUTCFullYear()
+          ).slice(-2)}`
+        : /^\d{4}-\d{2}-\d{2}/.test(expiryDate)
+        ? (() => {
+            const parsedExpiryDate = new Date(expiryDate);
+            return `${String(parsedExpiryDate.getUTCMonth() + 1).padStart(
+              2,
+              "0"
+            )}/${String(parsedExpiryDate.getUTCFullYear()).slice(-2)}`;
+          })()
+        : expiryDate;
+    const [expMonth, expYear] = expiry
       .split("/")
       .map((part) => parseInt(part, 10));
 

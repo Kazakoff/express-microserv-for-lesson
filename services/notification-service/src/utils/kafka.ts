@@ -4,7 +4,7 @@ import { resend } from "./resend";
 
 const kafka = new Kafka({
   clientId: "notification-service",
-  brokers: ["kafka:9092"],
+  brokers: (process.env.KAFKA_BROKERS || "kafka:9092").split(","),
   retry: {
     initialRetryTime: 100,
     maxRetryTime: 30000,

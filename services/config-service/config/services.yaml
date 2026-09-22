@@ -4,8 +4,8 @@ base:
 services:
   api-gateway:
     port: 3000
-    userServiceUrl: "http://user-service:1000"
-    orderServiceUrl: "http://order-service:2000"
+    userServiceUrl: "http://host.docker.internal:1000"
+    orderServiceUrl: "http://host.docker.internal:2001"
 
   user-service:
     port: 1000
@@ -15,7 +15,7 @@ services:
 
   payment-service:
     port: 4000
-    apiGatewayUrl: "http://api-gateway:3000"
+    apiGatewayUrl: "http://host.docker.internal:3000"
 
   notification-service:
     port: 5000

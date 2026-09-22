@@ -64,10 +64,19 @@ export const getPaymentDetails = async (
   req: Request,
   res: Response
 ): Promise<void> => {
-  const { userId } = req.params;
+  const userIdParam = req.params.userId;
+  const userId = Array.isArray(userIdParam) ? userIdParam[0] : userIdParam;
+
+  if (!userId) {
+    res.status(400).json({
+      success: false,
+      message: "User ID is required",
+    });
+    return;
+  }
 
   try {
-    const userPaymentDetails = await prisma.user.findUnique({
+    const userPaymentDetails = (await prisma.user.findUnique({
       where: { id: userId },
       select: {
         email: true,
@@ -80,7 +89,15 @@ export const getPaymentDetails = async (
           },
         },
       },
-    });
+    })) as {
+      email: string;
+      paymentMethods?: Array<{
+        id: string;
+        card_number: string;
+        cardholder_name: string;
+        expiry_date: Date;
+      }>;
+    } | null;
 
     if (!userPaymentDetails) {
       res.status(404).json({
@@ -90,10 +107,9 @@ export const getPaymentDetails = async (
       return;
     }
 
-    if (
-      !userPaymentDetails.paymentMethods ||
-      userPaymentDetails.paymentMethods.length === 0
-    ) {
+    const paymentMethods = userPaymentDetails.paymentMethods ?? [];
+
+    if (paymentMethods.length === 0) {
       res.status(404).json({
         success: false,
         message: "No payment details found for this user",
@@ -103,7 +119,7 @@ export const getPaymentDetails = async (
 
     res.status(200).json({
       success: true,
-      data: userPaymentDetails.paymentMethods[0],
+      data: paymentMethods[0],
       email: userPaymentDetails.email,
       message: "Payment details fetched successfully",
     });

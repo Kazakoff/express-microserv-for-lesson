@@ -73,7 +73,8 @@ export const getOrderStatus = async (
       return;
     }
 
-    const orderId = req.params.orderId;
+    const orderIdParam = req.params.orderId;
+    const orderId = Array.isArray(orderIdParam) ? orderIdParam[0] : orderIdParam;
 
     if (!orderId) {
       res

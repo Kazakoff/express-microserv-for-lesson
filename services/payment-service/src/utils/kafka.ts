@@ -4,7 +4,7 @@ import { processPayment } from "../utils/stripe";
 
 const kafka = new Kafka({
   clientId: "payment-service",
-  brokers: ["kafka:9092"],
+  brokers: (process.env.KAFKA_BROKERS || "kafka:9092").split(","),
   retry: {
     initialRetryTime: 100,
     maxRetryTime: 30000,
@@ -79,8 +79,8 @@ export async function runConsumer() {
         );
         const userEmail = getUserPaymentDetails.data.email;
 
-        const card_number = getUserPaymentDetails.data.card_number;
-        const expiry_date = getUserPaymentDetails.data.expiry_date;
+        const card_number = getUserPaymentDetails.data.data.card_number;
+        const expiry_date = getUserPaymentDetails.data.data.expiry_date;
 
         const result = await processPayment(
           orderId,
